@@ -1,0 +1,116 @@
+"""Data manager skeleton for contract-aware event-driven dataset tracking."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+from rose.data_exchange.dataset import Dataset
+from rose.data_exchange.descriptors import RoseDataDescriptor
+from rose.data_exchange.models import DataEvent, SourceSpec, SubscriptionRequest
+
+
+@dataclass
+class DatasetHandle:
+    """Handle used to configure and observe dataset completeness."""
+
+    descriptor_id: str
+    sources: dict[str, SourceSpec] = field(default_factory=dict)
+    received_parts: dict[str, int] = field(default_factory=dict)
+
+    def add_source(self, source: SourceSpec) -> None:
+        """Add a source that contributes data to completeness accounting."""
+        self.sources[source.source_id] = source
+        self.received_parts[source.source_id] = 0
+
+    def mark_part_received(self, source_id: str) -> None:
+        """Record that one source-part has been posted."""
+        self.received_parts[source_id] = self.received_parts.get(source_id, 0) + 1
+
+    @property
+    def is_complete(self) -> bool:
+        """Return whether all declared sources have contributed expected parts."""
+        if not self.sources:
+            return True
+        for source_id, source in self.sources.items():
+            if self.received_parts.get(source_id, 0) < source.expected_parts:
+                return False
+        return True
+
+
+@dataclass
+class DataManager:
+    """Single source of truth for descriptor registration and dataset state."""
+
+    _descriptors: dict[str, RoseDataDescriptor] = field(default_factory=dict)
+    _handles: dict[str, DatasetHandle] = field(default_factory=dict)
+    _datasets: dict[str, Dataset] = field(default_factory=dict)
+    _subscriptions: dict[str, list[SubscriptionRequest]] = field(default_factory=dict)
+    _events: list[DataEvent] = field(default_factory=list)
+    _next_event_id: int = 1
+
+    def register_descriptor(self, descriptor: RoseDataDescriptor) -> DatasetHandle:
+        """Register canonical descriptor and return a handle for source management."""
+        self._descriptors[descriptor.descriptor_id] = descriptor
+        handle = DatasetHandle(descriptor_id=descriptor.descriptor_id)
+        self._handles[descriptor.descriptor_id] = handle
+        return handle
+
+    def post_dataset(
+        self,
+        descriptor_id: str,
+        dataset: Dataset,
+        source_id: str | None = None,
+    ) -> None:
+        """Store a dataset update and record an event for remote subscribers."""
+        self._datasets[descriptor_id] = dataset
+        handle = self._handles.get(descriptor_id)
+        if handle and source_id is not None:
+            handle.mark_part_received(source_id)
+
+        event = DataEvent(
+            event_id=self._next_event_id,
+            descriptor_id=descriptor_id,
+            dataset_name=dataset.name,
+            source_id=source_id,
+            is_complete=handle.is_complete if handle else True,
+            metadata=dataset.metadata.copy(),
+        )
+        self._events.append(event)
+        self._next_event_id += 1
+
+    def get_dataset(self, descriptor_id: str) -> Dataset | None:
+        """Retrieve latest dataset for a descriptor id."""
+        return self._datasets.get(descriptor_id)
+
+    def query_by_metadata(self, query: dict[str, Any]) -> list[Dataset]:
+        """Find datasets matching exact metadata key/value pairs."""
+        results: list[Dataset] = []
+        for dataset in self._datasets.values():
+            if all(dataset.metadata.get(k) == v for k, v in query.items()):
+                results.append(dataset)
+        return results
+
+    def subscribe(self, request: SubscriptionRequest) -> None:
+        """Register a transport-neutral subscription for remote consumers."""
+        subscriptions = self._subscriptions.setdefault(request.descriptor_id, [])
+        subscriptions.append(request)
+
+    def fetch_events(
+        self,
+        subscriber_id: str,
+        after_event_id: int = 0,
+    ) -> list[DataEvent]:
+        """Return queued events visible to a remote subscriber."""
+        subscribed_descriptor_ids = {
+            request.descriptor_id
+            for requests in self._subscriptions.values()
+            for request in requests
+            if request.subscriber_id == subscriber_id
+        }
+        return [
+            event
+            for event in self._events
+            if event.event_id > after_event_id
+            and event.descriptor_id in subscribed_descriptor_ids
+        ]

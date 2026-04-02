@@ -1,4 +1,5 @@
 from rose.al import active_learner, selector
+from rose import data_exchange
 from rose.learner import Learner, LearnerConfig, TaskConfig
 from rose.metrics import *  # noqa: F403
 from rose.rl import reinforcement_learner
@@ -8,6 +9,7 @@ __all__ = [
     # Submodules
     "active_learner",
     "selector",
+    "data_exchange",
     "reinforcement_learner",
     "uq_learner",
     "uq_scorer",
