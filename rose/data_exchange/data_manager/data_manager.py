@@ -1,35 +1,46 @@
-"""Data manager skeleton for contract-aware event-driven dataset tracking."""
+"""
+Data manager skeleton for contract-aware event-driven dataset tracking
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from uuid import uuid4
 
+from rose.data_exchange.data_manager.models import DataEvent, SourceSpec, SubscriptionRequest
 from rose.data_exchange.dataset import Dataset
-from rose.data_exchange.descriptors import RoseDataDescriptor
-from rose.data_exchange.models import DataEvent, SourceSpec, SubscriptionRequest
+from rose.data_exchange.dataset import RoseDataDescriptor
 
 
 @dataclass
 class DatasetHandle:
-    """Handle used to configure and observe dataset completeness."""
+    """
+    Handle used to configure and observe dataset completeness
+    """
 
     descriptor_id: str
+    canonical_descriptor_id: str
     sources: dict[str, SourceSpec] = field(default_factory=dict)
     received_parts: dict[str, int] = field(default_factory=dict)
 
     def add_source(self, source: SourceSpec) -> None:
-        """Add a source that contributes data to completeness accounting."""
+        """
+        Add a source that contributes data to completeness accounting
+        """
         self.sources[source.source_id] = source
         self.received_parts[source.source_id] = 0
 
     def mark_part_received(self, source_id: str) -> None:
-        """Record that one source-part has been posted."""
+        """
+        Record that one source-part has been posted
+        """
         self.received_parts[source_id] = self.received_parts.get(source_id, 0) + 1
 
     @property
     def is_complete(self) -> bool:
-        """Return whether all declared sources have contributed expected parts."""
+        """
+        Return whether all declared sources have contributed expected parts
+        """
         if not self.sources:
             return True
         for source_id, source in self.sources.items():
@@ -40,9 +51,12 @@ class DatasetHandle:
 
 @dataclass
 class DataManager:
-    """Single source of truth for descriptor registration and dataset state."""
+    """
+    Single source of truth for descriptor registration and dataset state
+    """
 
     _descriptors: dict[str, RoseDataDescriptor] = field(default_factory=dict)
+    _canonical_descriptor_ids: dict[str, str] = field(default_factory=dict)
     _handles: dict[str, DatasetHandle] = field(default_factory=dict)
     _datasets: dict[str, Dataset] = field(default_factory=dict)
     _subscriptions: dict[str, list[SubscriptionRequest]] = field(default_factory=dict)
@@ -50,11 +64,43 @@ class DataManager:
     _next_event_id: int = 1
 
     def register_descriptor(self, descriptor: RoseDataDescriptor) -> DatasetHandle:
-        """Register canonical descriptor and return a handle for source management."""
-        self._descriptors[descriptor.descriptor_id] = descriptor
-        handle = DatasetHandle(descriptor_id=descriptor.descriptor_id)
-        self._handles[descriptor.descriptor_id] = handle
+        """
+        Register canonical descriptor and return a handle usable by ROSE workflows to
+        track completeness
+        """
+        existing_unique_id = self.resolve_descriptor_id(descriptor.descriptor_id)
+        if existing_unique_id is not None:
+            existing_descriptor = self._descriptors[existing_unique_id]
+            # Manage case where the descriptor has already been registered. If the descriptors
+            # differ, this is an error, otherwise simply return the previous registration handle.
+            if existing_descriptor != descriptor:
+                raise ValueError(
+                    "Descriptor mismatch for canonical registration: "
+                    f"{descriptor.descriptor_id}"
+                )
+            return self._handles[existing_unique_id]
+
+        unique_descriptor_id = f"{descriptor.descriptor_id}:{uuid4().hex}"
+        self._canonical_descriptor_ids[descriptor.descriptor_id] = unique_descriptor_id
+        self._descriptors[unique_descriptor_id] = descriptor
+        handle = DatasetHandle(
+            descriptor_id=unique_descriptor_id,
+            canonical_descriptor_id=descriptor.descriptor_id,
+        )
+        self._handles[unique_descriptor_id] = handle
         return handle
+
+    def resolve_descriptor_id(self, descriptor_id: str) -> str | None:
+        """
+        Resolve a canonical descriptor id to its unique registered descriptor id
+        """
+        return self._canonical_descriptor_ids.get(descriptor_id)
+
+    def get_descriptor(self, unique_descriptor_id: str) -> RoseDataDescriptor | None:
+        """
+        Retrieve a registered canonical descriptor by its unique id
+        """
+        return self._descriptors.get(unique_descriptor_id)
 
     def post_dataset(
         self,
@@ -62,7 +108,9 @@ class DataManager:
         dataset: Dataset,
         source_id: str | None = None,
     ) -> None:
-        """Store a dataset update and record an event for remote subscribers."""
+        """
+        Store a dataset update and record an event for remote subscribers
+        """
         self._datasets[descriptor_id] = dataset
         handle = self._handles.get(descriptor_id)
         if handle and source_id is not None:
@@ -80,19 +128,15 @@ class DataManager:
         self._next_event_id += 1
 
     def get_dataset(self, descriptor_id: str) -> Dataset | None:
-        """Retrieve latest dataset for a descriptor id."""
+        """
+        Retrieve latest dataset for a descriptor id
+        """
         return self._datasets.get(descriptor_id)
 
-    def query_by_metadata(self, query: dict[str, Any]) -> list[Dataset]:
-        """Find datasets matching exact metadata key/value pairs."""
-        results: list[Dataset] = []
-        for dataset in self._datasets.values():
-            if all(dataset.metadata.get(k) == v for k, v in query.items()):
-                results.append(dataset)
-        return results
-
     def subscribe(self, request: SubscriptionRequest) -> None:
-        """Register a transport-neutral subscription for remote consumers."""
+        """
+        Register a transport-neutral subscription for remote consumers
+        """
         subscriptions = self._subscriptions.setdefault(request.descriptor_id, [])
         subscriptions.append(request)
 
@@ -101,7 +145,9 @@ class DataManager:
         subscriber_id: str,
         after_event_id: int = 0,
     ) -> list[DataEvent]:
-        """Return queued events visible to a remote subscriber."""
+        """
+        Return queued events visible to a remote subscriber
+        """
         subscribed_descriptor_ids = {
             request.descriptor_id
             for requests in self._subscriptions.values()
