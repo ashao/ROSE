@@ -36,8 +36,6 @@ class RoseClientManager:
             key_format=self.key_format,
             coordinator_endpoint="rose-control://main",
             datastore_endpoint="datastore://shared",
-            event_stream_endpoint="rose-events://main",
-            registration_ttl_s=300,
         )
 
     def get_registration(self, rose_client_id: str) -> ClientRegistration:

@@ -59,7 +59,6 @@ class DataManager:
     _canonical_descriptor_ids: dict[str, str] = field(default_factory=dict)
     _handles: dict[str, DatasetHandle] = field(default_factory=dict)
     _datasets: dict[str, Dataset] = field(default_factory=dict)
-    _subscriptions: dict[str, list[SubscriptionRequest]] = field(default_factory=dict)
     _events: list[DataEvent] = field(default_factory=list)
     _next_event_id: int = 1
 
@@ -132,31 +131,3 @@ class DataManager:
         Retrieve latest dataset for a descriptor id
         """
         return self._datasets.get(descriptor_id)
-
-    def subscribe(self, request: SubscriptionRequest) -> None:
-        """
-        Register a transport-neutral subscription for remote consumers
-        """
-        subscriptions = self._subscriptions.setdefault(request.descriptor_id, [])
-        subscriptions.append(request)
-
-    def fetch_events(
-        self,
-        subscriber_id: str,
-        after_event_id: int = 0,
-    ) -> list[DataEvent]:
-        """
-        Return queued events visible to a remote subscriber
-        """
-        subscribed_descriptor_ids = {
-            request.descriptor_id
-            for requests in self._subscriptions.values()
-            for request in requests
-            if request.subscriber_id == subscriber_id
-        }
-        return [
-            event
-            for event in self._events
-            if event.event_id > after_event_id
-            and event.descriptor_id in subscribed_descriptor_ids
-        ]

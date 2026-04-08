@@ -32,9 +32,7 @@ class ClientConfig:
     key_format: str | None = None
     coordinator_endpoint: str | None = None
     datastore_endpoint: str | None = None
-    event_stream_endpoint: str | None = None
     workflow_id: str | None = None
-    registration_ttl_s: int | None = None
     extra_options: dict[str, Any] = field(default_factory=dict)
 
 
