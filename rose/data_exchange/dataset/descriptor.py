@@ -18,6 +18,7 @@ class ModificationPolicy(str, Enum):
     APPEND_ONLY = "append-only"
     FIXED = "fixed"
 
+
 @dataclass(frozen=True)
 class RoseDataDescriptor:
     """

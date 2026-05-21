@@ -5,46 +5,52 @@ Dataset container and metadata for data exchange operations
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Union
+from typing import Any, Union, TYPE_CHECKING
 
 import numpy as np
 
 from rose.data_exchange.dataset.decorators import check_locked
 
+if TYPE_CHECKING:
+    import numpy.typing as npt
+    from typing_extensions import Self
+
+
 class _MetadataMixin:
     """
     Mixin to add metadata handling to objects
     """
+
     metadata: dict[str, Any] = {}
     locked: bool = False
 
     @check_locked
     def add_metadata_with_key_value(self, key: str, value: Any) -> None:
-      """
-      Update metadata with a single key-value pair
+        """
+        Update metadata with a single key-value pair
 
-      :param key: metadata key to add or update
-      :param value: value to associate with the metadata key
-      """
-      self.metadata[key] = value
+        :param key: metadata key to add or update
+        :param value: value to associate with the metadata key
+        """
+        self.metadata[key] = value
 
     @check_locked
     def add_metadata_with_dict(self, metadata_dict: dict[str, Any]) -> None:
-      """
-      Update metadata with multiple key-value pairs from a dictionary
+        """
+        Update metadata with multiple key-value pairs from a dictionary
 
-      :param metadata_dict: dictionary of metadata key-value pairs to add or update
-      """
-      self.metadata.update(metadata_dict)
+        :param metadata_dict: dictionary of metadata key-value pairs to add or update
+        """
+        self.metadata.update(metadata_dict)
 
     @check_locked
     def remove_metadata_key(self, key: str) -> None:
-      """
-      Remove a metadata key if it exists
+        """
+        Remove a metadata key if it exists
 
-      :param key: metadata key to remove
-      """
-      self.metadata.pop(key, None)
+        :param key: metadata key to remove
+        """
+        self.metadata.pop(key, None)
 
 
 class DescribedTensor(np.ndarray, _MetadataMixin):
@@ -52,10 +58,13 @@ class DescribedTensor(np.ndarray, _MetadataMixin):
     Extension of numpy ndarray to include metadata for data exchange
     """
 
-    def __new__(cls, input_array, metadata=None):
+    def __new__(
+        cls, input_array: npt.ArrayLike, metadata: dict[str, Any] | None = None
+    ) -> Self:
         obj = np.asarray(input_array).view(cls)
         obj.metadata = metadata or {}
         return obj
+
 
 @dataclass
 class Dataset(_MetadataMixin):
@@ -67,7 +76,9 @@ class Dataset(_MetadataMixin):
     tensors: dict[str, np.ndarray | DescribedTensor] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
 
-    def add_tensor(self, field_name: str, tensor: Union[DescribedTensor, np.ndarray]) -> None:
+    def add_tensor(
+        self, field_name: str, tensor: Union[DescribedTensor, np.ndarray]
+    ) -> None:
         """
         Add or replace a tensor field in the dataset
         """
