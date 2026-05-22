@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from rose.data_exchange.client import AdvancedClient
+from rose.data_exchange.control_plane import ControlPlaneClient
 from rose.data_exchange.data_manager import DataManager
 from rose.data_exchange.data_manager.models import SourceSpec
 from rose.data_exchange.dataset import Dataset, RoseDataDescriptor
@@ -11,7 +12,7 @@ from rose.data_exchange.dataset import Dataset, RoseDataDescriptor
 
 def test_register_single_descriptor_starts_incomplete(
 	data_manager: DataManager,
-	client_control_plane: object,
+	client_control_plane: ControlPlaneClient,
 ) -> None:
 	"""
 	Registering one descriptor with one expected source is incomplete before posting
@@ -25,7 +26,6 @@ def test_register_single_descriptor_starts_incomplete(
 			}
 		},
 	)
-	_ = client_control_plane
 	handle = data_manager.register_descriptor(descriptor)
 
 	handle.add_source(SourceSpec(source_id="sim-rank-0", expected_parts=1))
