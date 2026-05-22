@@ -27,19 +27,6 @@ class RoseDataDescriptor:
 
     descriptor_id: str
     datafields: dict[str, dict[str, Any]] = field(default_factory=dict)
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict, compare=False)
     append_axis: int | None = None
     modification_policy: ModificationPolicy = ModificationPolicy.OVERWRITE
-
-    def __eq__(self, other: object) -> bool:
-        """
-        Equality check ignoring non-essential metadata fields
-        """
-        if not isinstance(other, RoseDataDescriptor):
-            return NotImplemented
-        return (
-            self.descriptor_id == other.descriptor_id
-            and self.datafields == other.datafields
-            and self.append_axis == other.append_axis
-            and self.modification_policy == other.modification_policy
-        )
