@@ -34,6 +34,11 @@ dev = [
     "pytest-cov"
 ]
 
+typing = [
+    "mypy",
+    "typing-extensions",  # required for py3.9
+]
+
 doc = [
     "mkdocs==1.5.3",
     "mkdocs-material==9.5.9",

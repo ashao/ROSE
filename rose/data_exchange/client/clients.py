@@ -7,7 +7,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from concurrent.futures import Future
 from functools import wraps
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from rose.data_exchange.backend import DataBackend
 from rose.data_exchange.client.models import (
@@ -20,14 +20,23 @@ from rose.data_exchange.control_plane import ControlPlaneClient
 from rose.data_exchange.dataset import Dataset
 from rose.data_exchange.dataset import RoseDataDescriptor
 
+if TYPE_CHECKING:
+    from typing_extensions import Concatenate, ParamSpec, TypeVar
 
-def _require_registered(method: Callable[..., Any]) -> Callable[..., Any]:
+    PR = ParamSpec("PR")
+    T = TypeVar("T")
+    AdvancedClientT = TypeVar("AdvancedClientT", bound="AdvancedClient")
+
+
+def _require_registered(
+    method: Callable[Concatenate[AdvancedClientT, PR], T],
+) -> Callable[Concatenate[AdvancedClientT, PR], T]:
     """
     Ensure AdvancedClient registration is completed before method execution
     """
 
     @wraps(method)
-    def wrapper(self: "AdvancedClient", *args: Any, **kwargs: Any) -> Any:
+    def wrapper(self: AdvancedClientT, /, *args: PR.args, **kwargs: PR.kwargs) -> T:
         if self._control_plane is None or self._rose_client_id is None:
             raise ValueError(
                 "AdvancedClient must be registered before declaring dataset intents"
@@ -52,11 +61,7 @@ class BasicClient:
         """
         Connect to backend
         """
-        response = self._backend.connect()
-        # Consider throwing a warning. Could be good for "quick and dirty" put/gets with
-        # no key mangling
-        if response is not None:
-            raise RuntimeError(f"Unexpected response from backend connect: {response}")
+        self._backend.connect()
 
     def register_dataset(
         self,
