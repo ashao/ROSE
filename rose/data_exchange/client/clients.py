@@ -61,11 +61,7 @@ class BasicClient:
         """
         Connect to backend
         """
-        response = self._backend.connect()
-        # Consider throwing a warning. Could be good for "quick and dirty" put/gets with
-        # no key mangling
-        if response is not None:
-            raise RuntimeError(f"Unexpected response from backend connect: {response}")
+        self._backend.connect()
 
     def register_dataset(
         self,
